@@ -1,0 +1,917 @@
+#!/usr/bin/python
+
+import sys
+import os
+
+
+
+src_path = '/usr/local/lib/python2.7/site-packages/QTornado/src'
+resource_path = '/usr/local/lib/python2.7/site-packages/QTornado/resource/static'
+
+if not os.path.exists(src_path) : 
+    print "not installed  completed ... yet or version isn't match"
+    src_path = "./" 
+    resource_path = "../resource/static"
+
+
+sys.path += [src_path]
+
+# load functional lib 
+
+from init_filter import FillContentHandler
+from lib import PathDecorator
+from lib import XmlTag
+import argparse
+
+root_path= os.path.dirname(__file__)
+
+fileSave = PathDecorator(root_path)
+
+class TreeFile(FillContentHandler):
+
+    def __init__(self,root,**kargs):
+        self.root_path  = root
+
+        self.static_path = os.path.join(self.root_path,"static")
+
+        super(TreeFile, self).__init__()
+
+    @fileSave.FileSave
+    def initial_files(self,**options):
+
+        cal_path = self.root_path
+
+        def _path(fileName):
+            return os.path.join(self.root_path,fileName)
+        
+        if not os.path.exists(self.root_path):
+            os.mkdir(self.root_path)
+        
+        os.mkdir(_path("static"))
+        os.mkdir(_path("template"))
+
+
+        controller_file = _path("controller.py")
+        controller_file_content = self.get_init_controller_file_content()
+
+        setting_file = _path("setting.py")
+        setting_file_content = self.get_init_setting_content()
+
+        html_file =  _path( "template/index.html")
+        html_file_content = self.get_html_content("index")
+
+        main_file = _path("main.py")
+        main_file_str = self.get_main_content()
+
+        print "manifest file copy is\t",
+        os.popen("cp {}  {}".format(os.path.join( src_path,"manifest.py"), cal_path))
+        print "  ok"
+
+        print "init  control \t",
+        self._write_file(controller_file,controller_file_content)
+        print " ok"
+
+        print "init setting ",
+        self._write_file(setting_file, setting_file_content)
+        print "\t ok"
+
+        print "init html ",
+        self._write_file(html_file, html_file_content)
+        print "\t ok"
+
+        print "run file load ",
+        self._write_file(main_file, main_file_str)
+        print "\t ok"
+
+        print "static res build ...",
+        com = "cp -a {}/*  {}".format(resource_path,_path("static"))
+        os.popen(com)
+        print "ok in  "
+
+    def _write_file(self,file_name,content):
+        with open(file_name,"w") as file_handler:
+            file_handler.write(content)
+
+    def add_content(self,file_name,content):
+        with open(file_name,"a") as file_handler :
+            print "\nadd controller ..."
+            file_handler.write(content)
+
+    @fileSave.FileSave
+    def add_controller(self,name,**options):
+        print "add controller : {}".format(name) ,
+        cal_path = self.root_path
+
+
+        path_name, handler_name =  self.get_path_handler_name(name)
+
+        controller_file = os.path.join(cal_path,"controller.py")
+        controller_file_content = self.get_new_controller(path_name)
+
+        setting_file = os.path.join(cal_path,"setting.py")
+        xmlTag = XmlTag(setting_file)
+        handler_name = handler_name[0].upper() + handler_name[1:]
+        print handler_name
+        xmlTag.changeTag("route", "(r'/{}',{}),".format(path_name,handler_name))
+
+        viewname=path_name + ".html"
+        template_dir = os.path.join(cal_path,"template")
+        html_file  = os.path.join(template_dir , viewname)
+        html_file_content = self.get_html_content(path_name,**options)
+
+        css_name = name.lower()
+        css_dir = os.path.join(self.static_path,"css")
+        css_file = os.path.join(css_dir ,css_name+ ".css")
+        css_content = self.get_css_content(css_name)
+        self._write_file(css_file,css_content)
+
+        js_name = name.lower()
+        js_dir = os.path.join(self.static_path,"js")
+        js_file = os.path.join(js_dir,js_name + ".js")
+        js_content = self.get_js_content(js_name)
+        self._write_file(js_file, js_content)
+
+        self.add_content(controller_file,controller_file_content)
+        print "add success"
+        self._write_file(html_file, html_file_content)
+
+    def get_path_handler_name(self,string):
+        return (string.lower() ,string[0].upper() + string[1:]+"Handler")
+
+
+def handle_args():
+
+    desc = """
+this is a assistant for write web html
+weite by Qingluan
+github : http://github.com/Qingluan
+    """
+    parser = argparse.ArgumentParser(usage='it is usage for qingluanTornado ', description=desc)
+    parser.add_argument('-p','--pro_name_path',help="this argu is represent project's name")
+    parser.add_argument('-i','--init',default=None)
+    parser.add_argument('-c','--add-controller',default=None)
+    parser.add_argument('-r','--re',default=False,type=bool)
+    parser.add_argument('-t','--theme-choice',default=None) 
+    parser.add_argument('-u','--uninstall',action="store_true",default=False)
+    parser.add_argument('-e','--extends',default=None,help="this is for add  a new   template that will  extend another template \n example : -e main")
+
+    # args,remind = parser.parse_known_args(args)
+    args = parser.parse_args()
+
+
+    return args
+
+
+
+            
+
+
+
+if __name__ == "__main__":
+    args = handle_args()
+    
+    if args.pro_name_path:
+        if "/" in args.pro_name_path:
+            fileSave.workpath =  os.path.join(root_path,args.pro_name_path)
+            tree = TreeFile(args.pro_name_path)
+        else :
+            fileSave.workpath = "./"
+            tree = TreeFile(args.pro_name_path)
+
+    if args.init:
+        if args.re:
+            tree.initial_files(re=True)
+        else:
+            tree.initial_files()
+        tree.add_controller(args.init)
+
+    if args.add_controller:
+        if args.theme_choice:
+            tree.add_controller(args.add_controller,theme=args.theme_choice)
+        elif args.extends:
+            tree,add_controller(args.add_controller,extends=args.extends)
+        else:
+            tree.add_controller(args.add_controller)
+    if args.uninstall :
+        if os.path.exists('/usr/local/bin/Qtornado.py'):
+            os.popen("rm /usr/local/bin/Qtornado.py*").read()
+        if os.path.exists('/usr/local/lib/python2.7/site-packages/QTornado'):
+            os.popen("rm -rf /usr/local/lib/python2.7/site-packages/QTornado")
+
+#!/usr/bin/python
+
+import sys
+import os
+
+
+
+src_path = '/usr/local/lib/python2.7/site-packages/QTornado/src'
+resource_path = '/usr/local/lib/python2.7/site-packages/QTornado/resource/static'
+
+if not os.path.exists(src_path) : 
+    print "not installed  completed ... yet or version isn't match"
+    src_path = "./" 
+    resource_path = "../resource/static"
+
+
+sys.path += [src_path]
+
+# load functional lib 
+
+from init_filter import FillContentHandler
+from lib import PathDecorator
+from lib import XmlTag
+import argparse
+
+root_path= os.path.dirname(__file__)
+
+fileSave = PathDecorator(root_path)
+
+class TreeFile(FillContentHandler):
+
+    def __init__(self,root,**kargs):
+        self.root_path  = root
+
+        self.static_path = os.path.join(self.root_path,"static")
+
+        super(TreeFile, self).__init__()
+
+    @fileSave.FileSave
+    def initial_files(self,**options):
+
+        cal_path = self.root_path
+
+        def _path(fileName):
+            return os.path.join(self.root_path,fileName)
+        
+        if not os.path.exists(self.root_path):
+            os.mkdir(self.root_path)
+        
+        os.mkdir(_path("static"))
+        os.mkdir(_path("template"))
+
+
+        controller_file = _path("controller.py")
+        controller_file_content = self.get_init_controller_file_content()
+
+        setting_file = _path("setting.py")
+        setting_file_content = self.get_init_setting_content()
+
+        html_file =  _path( "template/index.html")
+        html_file_content = self.get_html_content("index")
+
+        main_file = _path("main.py")
+        main_file_str = self.get_main_content()
+
+        print "manifest file copy is\t",
+        os.popen("cp {}  {}".format(os.path.join( src_path,"manifest.py"), cal_path))
+        print "  ok"
+
+        print "init  control \t",
+        self._write_file(controller_file,controller_file_content)
+        print " ok"
+
+        print "init setting ",
+        self._write_file(setting_file, setting_file_content)
+        print "\t ok"
+
+        print "init html ",
+        self._write_file(html_file, html_file_content)
+        print "\t ok"
+
+        print "run file load ",
+        self._write_file(main_file, main_file_str)
+        print "\t ok"
+
+        print "static res build ...",
+        com = "cp -a {}/*  {}".format(resource_path,_path("static"))
+        os.popen(com)
+        print "ok in  "
+
+    def _write_file(self,file_name,content):
+        with open(file_name,"w") as file_handler:
+            file_handler.write(content)
+
+    def add_content(self,file_name,content):
+        with open(file_name,"a") as file_handler :
+            print "\nadd controller ..."
+            file_handler.write(content)
+
+    @fileSave.FileSave
+    def add_controller(self,name,**options):
+        print "add controller : {}".format(name) ,
+        cal_path = self.root_path
+
+
+        path_name, handler_name =  self.get_path_handler_name(name)
+
+        controller_file = os.path.join(cal_path,"controller.py")
+        controller_file_content = self.get_new_controller(path_name)
+
+        setting_file = os.path.join(cal_path,"setting.py")
+        xmlTag = XmlTag(setting_file)
+        handler_name = handler_name[0].upper() + handler_name[1:]
+        print handler_name
+        xmlTag.changeTag("route", "(r'/{}',{}),".format(path_name,handler_name))
+
+        viewname=path_name + ".html"
+        template_dir = os.path.join(cal_path,"template")
+        html_file  = os.path.join(template_dir , viewname)
+        html_file_content = self.get_html_content(path_name,**options)
+
+        css_name = name.lower()
+        css_dir = os.path.join(self.static_path,"css")
+        css_file = os.path.join(css_dir ,css_name+ ".css")
+        css_content = self.get_css_content(css_name)
+        self._write_file(css_file,css_content)
+
+        js_name = name.lower()
+        js_dir = os.path.join(self.static_path,"js")
+        js_file = os.path.join(js_dir,js_name + ".js")
+        js_content = self.get_js_content(js_name)
+        self._write_file(js_file, js_content)
+
+        self.add_content(controller_file,controller_file_content)
+        print "add success"
+        self._write_file(html_file, html_file_content)
+
+    def get_path_handler_name(self,string):
+        return (string.lower() ,string[0].upper() + string[1:]+"Handler")
+
+
+def handle_args():
+
+    desc = """
+this is a assistant for write web html
+weite by Qingluan
+github : http://github.com/Qingluan
+    """
+    parser = argparse.ArgumentParser(usage='it is usage for qingluanTornado ', description=desc)
+    parser.add_argument('-p','--pro_name_path',help="this argu is represent project's name")
+    parser.add_argument('-i','--init',default=None)
+    parser.add_argument('-c','--add-controller',default=None)
+    parser.add_argument('-r','--re',default=False,type=bool)
+    parser.add_argument('-t','--theme-choice',default=None) 
+    parser.add_argument('-u','--uninstall',action="store_true",default=False)
+    parser.add_argument('-e','--extends',default=None,help="this is for add  a new   template that will  extend another template \n example : -e main")
+
+    # args,remind = parser.parse_known_args(args)
+    args = parser.parse_args()
+
+
+    return args
+
+
+
+            
+
+
+
+if __name__ == "__main__":
+    args = handle_args()
+    
+    if args.pro_name_path:
+        if "/" in args.pro_name_path:
+            fileSave.workpath =  os.path.join(root_path,args.pro_name_path)
+            tree = TreeFile(args.pro_name_path)
+        else :
+            fileSave.workpath = "./"
+            tree = TreeFile(args.pro_name_path)
+
+    if args.init:
+        if args.re:
+            tree.initial_files(re=True)
+        else:
+            tree.initial_files()
+        tree.add_controller(args.init)
+
+    if args.add_controller:
+        if args.theme_choice:
+            tree.add_controller(args.add_controller,theme=args.theme_choice)
+        elif args.extends:
+            tree,add_controller(args.add_controller,extends=args.extends)
+        else:
+            tree.add_controller(args.add_controller)
+    if args.uninstall :
+        if os.path.exists('/usr/local/bin/Qtornado.py'):
+            os.popen("rm /usr/local/bin/Qtornado.py*").read()
+        if os.path.exists('/usr/local/lib/python2.7/site-packages/QTornado'):
+            os.popen("rm -rf /usr/local/lib/python2.7/site-packages/QTornado")
+
+from initial_content import InitContent
+
+class FillContentHandler(object):
+
+    def __init__(self):
+        self.content = InitContent
+        import os
+        self.static_res_path = os.path.join(os.getcwd(),"../resource/static")
+        print self.static_path
+
+    def get_init_controller_file_content(self):
+        handler_str = self.content['BaseHandler']
+        index_handler_str = self.content['handler']
+        index_handler_str = index_handler_str %("Index","Index","index","")
+
+        return "\n".join([handler_str,index_handler_str])
+
+    def get_new_controller(self,name):
+        # ensuer str 's first char is upper
+        controller_name = name[0].upper() + name[1:]
+        controller_name_low = name[0].lower() + name[1:]
+
+        controller__str = self.content['handler']
+        controller__str = controller__str % (controller_name,controller_name,controller_name_low,controller_name_low)
+        return controller__str
+
+    def get_init_setting_content(self):
+        setting_str = self.content['setting']
+        return setting_str
+
+
+    def get_html_content(self,html_name,**options):
+        def _fill_args(string,*args):
+            try:
+                print args
+                new_str = string % tuple( args)
+                return new_str
+            except TypeError:
+                args = list(args) + [args[0]]
+            
+                new_args = tuple(args )
+                return _fill_args(string,*new_args)
+        if "theme" in options:
+            html_str = self.content[options["theme"]]
+            try:
+                html_str = _fill_args(html_str,html_name) 
+
+                return html_str
+            except ValueError:
+                return html_str
+        if "extends" in options:
+            html_str = self.content["extends_html"]
+            try:
+                html_str = _fill_args(html_str,options['extends'])
+                html_str = html_str.replace(r'$', r'%')
+                return html_str
+            except ValueError:
+                return html_str
+
+        html_str = self.content['html']
+        html_str = _fill_args(html_str ,html_name)
+        html_str = html_str.replace(r'$', r'%')
+        return html_str
+
+    def get_css_content(self,css_name):
+        css_str = self.content['css']
+        css_str = css_str % (css_name)
+        return css_str
+
+    def get_main_content(self):
+        return self.content['main']
+
+    def get_js_content(self,name,**options):
+        js_str = self.content['js']
+        js_str = js_str % (name)
+        return js_str
+
+
+if __name__ == '__main__':
+    test = FillContentHandler()
+    print test.get_init_controller_file_content()
+    print test.get_init_setting_content()
+    print test.get_html_content("test")
+    
+from initial_content import InitContent
+
+class FillContentHandler(object):
+
+    def __init__(self):
+        self.content = InitContent
+        import os
+        self.static_res_path = os.path.join(os.getcwd(),"../resource/static")
+        print self.static_path
+
+    def get_init_controller_file_content(self):
+        handler_str = self.content['BaseHandler']
+        index_handler_str = self.content['handler']
+        index_handler_str = index_handler_str %("Index","Index","index","")
+
+        return "\n".join([handler_str,index_handler_str])
+
+    def get_new_controller(self,name):
+        # ensuer str 's first char is upper
+        controller_name = name[0].upper() + name[1:]
+        controller_name_low = name[0].lower() + name[1:]
+
+        controller__str = self.content['handler']
+        controller__str = controller__str % (controller_name,controller_name,controller_name_low,controller_name_low)
+        return controller__str
+
+    def get_init_setting_content(self):
+        setting_str = self.content['setting']
+        return setting_str
+
+
+    def get_html_content(self,html_name,**options):
+        def _fill_args(string,*args):
+            try:
+                print args
+                new_str = string % tuple( args)
+                return new_str
+            except TypeError:
+                args = list(args) + [args[0]]
+            
+                new_args = tuple(args )
+                return _fill_args(string,*new_args)
+        if "theme" in options:
+            html_str = self.content[options["theme"]]
+            try:
+                html_str = _fill_args(html_str,html_name) 
+
+                return html_str
+            except ValueError:
+                return html_str
+        if "extends" in options:
+            html_str = self.content["extends_html"]
+            try:
+                html_str = _fill_args(html_str,options['extends'])
+                html_str = html_str.replace(r'$', r'%')
+                return html_str
+            except ValueError:
+                return html_str
+
+        html_str = self.content['html']
+        html_str = _fill_args(html_str ,html_name)
+        html_str = html_str.replace(r'$', r'%')
+        return html_str
+
+    def get_css_content(self,css_name):
+        css_str = self.content['css']
+        css_str = css_str % (css_name)
+        return css_str
+
+    def get_main_content(self):
+        return self.content['main']
+
+    def get_js_content(self,name,**options):
+        js_str = self.content['js']
+        js_str = js_str % (name)
+        return js_str
+
+
+if __name__ == '__main__':
+    test = FillContentHandler()
+    print test.get_init_controller_file_content()
+    print test.get_init_setting_content()
+    print test.get_html_content("test")
+    
+
+
+
+
+
+
+InitContent = {
+# this is setting file 's content 
+	'setting':"""
+
+## write by qingluan 
+# this is a config file
+# include db and debug , static path 
+
+import motor 
+from os import path
+# here to load all controllers
+
+from controller import *
+
+# db engine 
+db_engine = motor.MotorClient()
+
+# static path 
+static_path = "./static"
+
+
+Settings = {
+        'db':db_engine,
+        'debug':True,
+        'autoreload':True,
+        'cookie_secret':'This string can be any thing you want',
+        'static_path' : static_path,
+    }
+
+
+## follow is router
+
+appication = tornado.web.Application([
+                (r'/',IndexHandler),
+                # add some new route to router
+                ##<route></route>
+                # (r'/main',MainHandler),
+         ],**Settings)
+
+
+# setting port 
+port = 8080
+
+if __name__ == "__main__":
+	appication.listen(8080)
+	tornado.ioloop.IOLoop.instance().start() 
+
+""",
+
+# this is base handler for all handler to inherited
+	'BaseHandler':"""
+## this is write by qingluan 
+# just a inti handler 
+# and a tempalte offer to coder
+
+import tornado
+import tornado.web
+
+class BaseHandler(tornado.web.RequestHandler):
+	def prepare(self):
+		self.db = self.settings['db']
+	def get_current_user(self):
+		return (self.get_cookie('user'),self.get_cookie('passwd'))
+	def get_current_secure_user(self):
+		return (self.get_cookie('user'),self.get_secure_cookie('passwd'))
+	def set_current_seccure_user_cookie(self,user,passwd):
+		self.set_cookie('user',user)
+		self.set_secure_cookie("passwd",passwd)
+
+""",
+
+
+# this is handler 's template
+
+	'handler':"""
+
+
+class %sHandler(BaseHandler):
+	
+	def prepare(self):
+		super(%sHandler,self).prepare()
+		self.template = "template/%s.html"
+
+	def get(self):
+		return self.render(self.template,post_page="/%s")
+
+	@tornado.web.asynchronous
+	def post(self):
+		# you should get some argument from follow 
+		post_args = self.get_argument("some_argument")
+		# .....
+
+		# self.redirect()  # redirect or reply some content
+		self.write("hello world")
+	""",
+#this is a extends templates  , '$' is special syn , need to take a transation to '%' 
+	'html':"""
+
+<!DOCTYPE html>
+<html lang="en">
+<head>      
+    <meta charset="UTF-8">
+    <title>%s</title>     
+    <link href="/static/bootstrap/dist/css/bootstrap.css" rel="stylesheet"></link>
+    {$ block head_css $}
+     <link href="/static/css/%s.css" rel="stylesheet"></link>
+    {$ end $}
+    {$ block extends_css $}
+    {$ end $}
+</head>     
+<body>      
+        <p>%s</p> 
+        <script src="/static/jquery/dist/jquery.min.js"></script>
+        <script src="/static/bootstrap/dist/js/bootstrap.js"></script>
+        {$ block body_js $}
+        <script src="/static/js/%s.js"></script>
+        {$ end $}
+        {$ block extends_js $}
+        {$ end $}
+</body>     
+</html>
+	""",
+        'css':"""
+#written by qingluan
+#
+#this css file is belong to %s
+        """,
+#this is a extends templates  , '$' is special syn , need to take a transation to '%' 
+'extends_html':"""
+{$ extends "%s.html"  $} 
+    {$ block extends_css $}
+        <link href="/static/css/%s.css" rel="stylesheet"></link>
+    {$ end  $}
+
+    {$ block extends_js $}
+    <script src="/static/js/%s.js"></script>
+    {$ end $}
+{$ end $}
+        """,
+        'js':"""
+        // this is js file for %s 
+        """,
+	
+        'main':"""
+#!/usr/bin/python
+## write by qingluan 
+# just a run file 
+
+import tornado.ioloop
+from tornado.ioloop import IOLoop
+from setting import  appication
+
+if __name__ == "__main__":
+	appication.listen(8080)
+	tornado.ioloop.IOLoop.instance().start() 
+
+	""",
+#this is a ad for our ISC 
+
+        'ISC':"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+        <link rel="stylesheet" type="text/css" href="static/bootstrap/dist/css/bootstrap.css"></link>
+            <title>{}</title>
+                
+                    <style type="text/css">
+                        b{
+                                font-weight: lighter;
+                                    }
+                                        h1,h3,h4 ,h2,h5{
+                                                font-weight: 100;
+                                                    }
+                                                        .good-words{
+                                                                margin-top: 20%;
+                                                                    }
+                                                                        </style>
+                                                                        </head>
+                                                                        <body>
+                                                                        <div class="pic">
+                                                                            <img src="static/images/hat.png" style="position: absolute;
+                                                                            left: 25%;
+                                                                            max-width: 200px;
+                                                                            bottom: 41%;
+                                                                            padding: 15px;
+                                                                            border-right: solid 1px;">
+                                                                            </div>
+                                                                                <div class="container" style="position: absolute;
+                                                                                bottom: 3%; margin-left: 20px">
+
+                                                                                        <p style="font-weight: 100;
+                                                                                        font-size: 15px;">Address: <small style="font-family: fantasy;" >113</small></p>   
+                                                                                                <p style="font-weight: 100;
+                                                                                                font-size: 15px;">Time: <small style="font-family: fantasy;">21:42</small></p>   
+                                                                                                    </div>
+                                                                                                        <div class="col-md-4" style="bottom: 33%;
+                                                                                                        position: absolute;
+                                                                                                        text-align: center;
+
+                                                                                                        right: 31%;font-weight: 100">
+                                                                                                                <div class="theme-main" style="
+                                                                                                                text-align: left;
+                                                                                                                margin-left: 11%;
+                                                                                                                        ">
+                                                                                                                                    <h1>ISA  </h1>
+                                                                                                                                                <h4 style="padding-top: 8px;margin-top:10px">Isa green hand  </h4>
+                                                                                                                                                            <h2 style="margin-top: 0px;padding-bottom: 26px"> Meet-and-greet </h2>h2</div>
+                                                                                                                                                                    
+                                                                                                                                                                            <span class="good-words" style="
+                                                                                                                                                                                    position: absolute;
+                                                                                                                                                                                            top: 98%;
+                                                                                                                                                                                                    left: 10%;
+                                                                                                                                                                                                            font-family: fantasy ;color:rgb(107, 167, 194)">
+                                                                                                                                                                                                                        <h5 style="margin: 0px;">The quieter you become </h5>
+                                                                                                                                                                                                                                    <h4 style="margin: 0px;"> The more you are able to hear </h4>h4</span>
+                                                                                                                                                                                                                                            
+
+                                                                                                                                                                                                                                                </div>
+                                                                                                                                                                                                                                                    <script src="static/jquery/dist/jquery.min.js"></script>
+                                                                                                                                                                                                                                                        <script type="text/javascript" src="static/bootstrap/dist/js/bootstrap.js" ></script>
+                                                                                                                                                                                                                                                        </body>
+                                                                                                                                                                                                                                                        </html>
+
+        """,
+
+}
+import os
+import HTMLParser
+import re
+class PathDecorator(object):
+
+	def __init__(self,path):
+		self.workpath = path
+
+	def FileSave(self,func):			
+		def __file_work(*args,**kargs):
+			kargs['path'] = self.workpath
+
+			def _path(subfile):
+				return os.path.join(self.workpath,subfile)
+
+			if    "re" in kargs:
+				print "re init project ...."
+				try:
+					os.rmdir(self.workpath)
+				except OSError:
+					files = os.listdir(self.workpath)
+					print "remain incomplete files ... {} ".format(files)
+					print "start clean it  "
+
+					[ os.popen("rm  {} ".format(_path(file))) for file in files]
+
+				print "rm old version "
+
+			if not os.path.exists(self.workpath):
+				print "mkdir root path"
+				os.mkdir(self.workpath)				
+
+			res =  func(*args,**kargs)
+			return res
+		return __file_work
+		
+class XmlTag(object):
+
+	def __init__(self,file_name):
+		self.file_name = file_name
+		self.read_fp = open(self.file_name)
+
+		
+
+	def changeTag(self,tag,new):
+		re_compile = re.compile(r'(\#<{}>)'.format(tag))
+		print re_compile.pattern
+		new_content = ""
+		for line in self.read_fp:
+			if not re_compile.findall(line):
+
+				new_content += line
+			else :
+				print "add  route : {} ".format(new[1:-1])
+                                new_content += "\t\t{}\n#<{}></{}>\n".format(new,tag,tag )
+
+		self.read_fp.close()
+		with open(self.file_name,'w') as fp:
+			fp.write(new_content)
+		
+import sys
+import os
+
+
+# load functional lib 
+sys.path += ['/usr/local/bin']
+from Qtornado import TreeFile
+
+
+import argparse
+
+root_path= os.path.dirname(__file__)
+
+
+def handle_args():
+
+    desc = """
+this is a assistant for write web html
+weite by Qingluan
+github : http://github.com/Qingluan
+    """
+    parser = argparse.ArgumentParser(usage='it is usage for qingluanTornado ', description=desc)
+    parser.add_argument('-u','--unintall',action="store_true",default=False,help="uninstall this project")
+    parser.add_argument('-c','--add-controller',default=None)
+    parser.add_argument('-t','--theme-choice',default=None) 
+    parser.add_argument('-e','--extends',default=None,help="this will create a new html by extends another template ")  
+    # args,remind = parser.parse_known_args(args)
+    args = parser.parse_args()
+
+
+    return args
+
+
+
+            
+
+
+
+if __name__ == "__main__":
+    args = handle_args()
+
+    workpath =  os.path.dirname(__file__) #  
+    tree = TreeFile(workpath)
+
+
+    if args.unintall:
+        os.popen("rm -rf ./*")
+
+    if args.add_controller:
+        if args.theme_choice:
+            tree.add_controller(args.add_controller,theme=args.theme_choice)
+        elif args.extends:
+            tree.add_controller(args.add_controller,extends=args.extends)
+        else:
+            tree.add_controller(args.add_controller)
+
