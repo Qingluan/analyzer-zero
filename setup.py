@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='Analyzer-zero',
-    version='0.1',
+    version='0.2',
     description='a anayzer package',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',
